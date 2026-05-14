@@ -6,10 +6,10 @@ export default function LandingPage() {
     <div className="min-h-screen bg-[#0A0E17] text-slate-200 font-sans selection:bg-amber-500/30">
       {/* Background Image / Overlay */}
       <div 
-        className="absolute top-0 left-0 right-0 h-[800px] bg-cover bg-center opacity-30 mix-blend-overlay z-0"
-        style={{ backgroundImage: "url('https://images.unsplash.com/photo-1509391366360-2e959784a276?q=80&w=2072&auto=format&fit=crop')" }}
+        className="absolute top-0 left-0 right-0 h-[800px] bg-cover bg-center opacity-40 mix-blend-luminosity z-0"
+        style={{ backgroundImage: "url('/hero-bg.png')" }}
       ></div>
-      <div className="absolute top-0 left-0 right-0 h-[800px] bg-gradient-to-b from-[#0A0E17]/20 via-[#0A0E17]/80 to-[#0A0E17] z-0"></div>
+      <div className="absolute top-0 left-0 right-0 h-[800px] bg-gradient-to-b from-[#0A0E17]/40 via-[#0A0E17]/80 to-[#0A0E17] z-0"></div>
 
       <div className="relative z-10">
         {/* Navigation */}

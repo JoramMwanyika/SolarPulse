@@ -32,27 +32,29 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 flex relative overflow-hidden text-slate-200">
-      {/* Background dark gradient / image placeholder */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center opacity-30 mix-blend-overlay"
-        style={{ backgroundImage: "url('https://images.unsplash.com/photo-1509391366360-2e959784a276?q=80&w=2072&auto=format&fit=crop')" }}
-      ></div>
-      <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/80 to-slate-950/40 z-0"></div>
+      {/* Left side - Form */}
+      <div className="w-full lg:w-1/2 flex flex-col justify-center relative p-8 lg:p-12 xl:p-16 z-10 overflow-y-auto">
+        {/* original background for mobile */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center opacity-10 lg:hidden"
+          style={{ backgroundImage: "url('/hero-bg.png')" }}
+        ></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/90 to-slate-950 z-0 lg:hidden"></div>
 
-      <div className="z-10 w-full max-w-lg p-8 md:p-12 ml-0 lg:ml-[10%] xl:ml-[15%] flex flex-col justify-center">
-        <div className="flex items-center mb-8">
-          <div className="w-8 h-8 bg-amber-500 rounded flex items-center justify-center mr-3 shadow-[0_0_10px_rgba(245,158,11,0.5)]">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-            </svg>
+        <div className="z-10 w-full max-w-lg mx-auto">
+          <div className="flex items-center mb-8">
+            <div className="w-8 h-8 bg-amber-500 rounded flex items-center justify-center mr-3 shadow-[0_0_10px_rgba(245,158,11,0.5)]">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+            </div>
+            <span className="text-xl font-bold tracking-tight text-white uppercase tracking-widest">Solar<br/><span className="text-[0.6rem] text-slate-400 font-normal leading-none block">Pulse</span></span>
           </div>
-          <span className="text-xl font-bold tracking-tight text-white uppercase tracking-widest">Solar<br/><span className="text-[0.6rem] text-slate-400 font-normal leading-none block">Pulse</span></span>
-        </div>
 
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Create Your Account</h1>
-          <p className="text-slate-400">Join thousands of users monitoring their solar systems</p>
-        </div>
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-white mb-2">Create Your Account</h1>
+            <p className="text-slate-400">Join thousands of users monitoring their solar systems</p>
+          </div>
 
         <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/60 rounded-2xl p-6 shadow-2xl">
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -183,6 +185,20 @@ export default function SignupPage() {
         
         <div className="mt-8 text-xs text-slate-600 text-center">
           © 2026 SolarPulse. All rights reserved.
+        </div>
+        </div>
+      </div>
+      
+      {/* Right side - Image */}
+      <div className="hidden lg:flex lg:w-1/2 relative shadow-[-10px_0_30px_rgba(0,0,0,0.5)] z-20">
+        <div 
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: "url('/hero-bg.png')" }}
+        ></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent"></div>
+        <div className="absolute bottom-16 left-12 right-12 text-right">
+          <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 leading-tight">Join The Energy<br/><span className="text-amber-500">Revolution</span></h2>
+          <p className="text-slate-300 text-lg ml-auto max-w-md">Empowering businesses and homeowners to transition to sustainable energy with confidence.</p>
         </div>
       </div>
     </div>
