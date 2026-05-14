@@ -13,11 +13,19 @@ const createIcon = (color: 'green' | 'yellow' | 'red') => {
     red: '#ef4444', // red-500
   }
   
+  const svgIcon = `
+    <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7Z" fill="${colorMap[color]}" stroke="#000" stroke-width="1.5"/>
+      <circle cx="12" cy="9" r="3" fill="#ffffff"/>
+    </svg>
+  `;
+
   return L.divIcon({
     className: 'custom-marker',
-    html: `<div style="background-color: ${colorMap[color]}; width: 16px; height: 16px; border-radius: 50%; border: 3px solid #000; box-shadow: 0 0 10px ${colorMap[color]};"></div>`,
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
+    html: `<div style="display:flex; justify-content:center; align-items:flex-end; height:100%; filter: drop-shadow(0px 4px 4px rgba(0,0,0,0.5));">${svgIcon}</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -32],
   })
 }
 

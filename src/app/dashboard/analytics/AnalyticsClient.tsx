@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { supabase } from '@/utils/supabase/client'
 import { 
   BarChart3, Calendar, Filter, Zap, Activity, Clock, Award, 
   BrainCircuit, CloudRain, Sun, AlertTriangle, Download, Share2
@@ -10,28 +11,7 @@ import {
   BarChart, Bar, Legend, Cell, PieChart, Pie
 } from 'recharts'
 
-// SIMULATOR ENGINE -------------------------------------------------------------
-// We simulate historical data because the DB currently only has real-time inserts.
-
-const generateTimeSeriesData = (period: string, expectedBase: number) => {
-  const points = period === 'Today' ? 24 : period === 'Week' ? 7 : period === 'Month' ? 30 : 12
-  const labels = period === 'Today' ? Array.from({length: 24}, (_, i) => `${i}:00`) 
-    : period === 'Week' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    : Array.from({length: points}, (_, i) => `Day ${i+1}`)
-
-  return labels.map((label, i) => {
-    // Add some random variation, and a distinct "drop" for anomaly simulation
-    const isAnomaly = period === 'Week' && i === 3 // Thursday drop
-    const expected = expectedBase + (Math.sin(i) * expectedBase * 0.2)
-    const actual = isAnomaly ? expected * 0.4 : expected * (0.85 + Math.random() * 0.2)
-    
-    return {
-      time: label,
-      expected: Number(expected.toFixed(1)),
-      actual: Number(actual.toFixed(1)),
-    }
-  })
-}
+// We no longer simulate historical data for the graph as we now fetch from the database.
 
 const generateHeatmapData = (sites: any[]) => {
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
@@ -51,15 +31,118 @@ const generateHeatmapData = (sites: any[]) => {
 
 export default function AnalyticsClient({ sites, initialAlerts }: { sites: any[], initialAlerts: any[] }) {
   const [selectedSite, setSelectedSite] = useState('all')
-  const [selectedPeriod, setSelectedPeriod] = useState('Week')
+  const [selectedPeriod, setSelectedPeriod] = useState('Live (Minutes)')
   const [selectedVendor, setSelectedVendor] = useState('all')
-  
-  // 1. Simulators based on filters
-  const timeSeriesData = useMemo(() => {
-    const base = selectedSite === 'all' ? sites.reduce((sum, s) => sum + (s.total_kwp || 0), 0) : 
-      (sites.find(s => s.id === selectedSite)?.total_kwp || 100)
-    return generateTimeSeriesData(selectedPeriod, base / 2)
-  }, [selectedSite, selectedPeriod, sites])
+  const [liveData, setLiveData] = useState<any[]>([])
+  const [graphData, setGraphData] = useState<any[]>([])
+  // Keep raw data in state to make realtime aggregation accurate
+  const [rawData, setRawData] = useState<any[]>([])
+
+  useEffect(() => {
+    const channel = supabase.channel('analytics-telemetry-feed')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'telemetry' },
+        (payload) => {
+          const site = sites.find(s => s.id === payload.new.site_id)
+          if (selectedSite === 'all' || selectedSite === payload.new.site_id) {
+            setLiveData(prev => {
+              const newData = [{ ...payload.new, site_name: site?.site_name || 'Unknown' }, ...prev]
+              return newData.slice(0, 10)
+            })
+
+            // Add to raw data and let the useMemo handle the re-aggregation
+            setRawData(prev => [...prev, payload.new])
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [sites, selectedSite])
+
+  // Fetch initial graph data
+  useEffect(() => {
+    let isMounted = true
+    const fetchGraphData = async () => {
+      let startTime = new Date()
+      if (selectedPeriod === 'Live (Minutes)') {
+        startTime.setHours(startTime.getHours() - 1)
+      } else if (selectedPeriod === 'Today (Hourly)') {
+        startTime.setHours(startTime.getHours() - 24)
+      } else if (selectedPeriod === 'Week') {
+        startTime.setDate(startTime.getDate() - 7)
+      } else if (selectedPeriod === 'Month') {
+        startTime.setDate(startTime.getDate() - 30)
+      } else {
+        startTime.setFullYear(startTime.getFullYear() - 1)
+      }
+
+      let query = supabase.from('telemetry').select('*').gte('timestamp', startTime.toISOString()).order('timestamp', { ascending: true })
+      if (selectedSite !== 'all') {
+        query = query.eq('site_id', selectedSite)
+      }
+
+      const { data, error } = await query
+      if (error || !isMounted || !data) return
+      setRawData(data)
+    }
+
+    fetchGraphData()
+    return () => { isMounted = false }
+  }, [selectedPeriod, selectedSite])
+
+  // Aggregate raw data into graph format
+  useEffect(() => {
+    if (rawData.length === 0) return
+
+    const grouped: Record<string, Record<string, { total: number; count: number }>> = {}
+    
+    rawData.forEach(row => {
+      const d = new Date(row.timestamp)
+      let key = ''
+      if (selectedPeriod === 'Live (Minutes)') {
+        key = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+      } else if (selectedPeriod === 'Today (Hourly)') {
+        key = `${d.getHours().toString().padStart(2, '0')}:00`
+      } else {
+        key = d.toISOString().split('T')[0]
+      }
+
+      if (!grouped[key]) grouped[key] = {}
+      if (!grouped[key][row.site_id]) grouped[key][row.site_id] = { total: 0, count: 0 }
+      
+      grouped[key][row.site_id].total += Number(row.current_power_kw || 0)
+      grouped[key][row.site_id].count += 1
+    })
+
+    const capacity = selectedSite === 'all' ? sites.reduce((sum, s) => sum + (s.total_kwp || 0), 0) : (sites.find(s => s.id === selectedSite)?.total_kwp || 10)
+    
+    const formatted = Object.keys(grouped).map(key => {
+      let bucketTotal = 0;
+      Object.keys(grouped[key]).forEach(siteId => {
+        bucketTotal += grouped[key][siteId].total / grouped[key][siteId].count
+      })
+
+      return {
+        time: key,
+        expected: capacity,
+        actual: Number(bucketTotal.toFixed(2))
+      }
+    })
+
+    // Sort chronologically just in case
+    formatted.sort((a, b) => a.time.localeCompare(b.time))
+    
+    // For live view, only keep the latest 60 points to avoid squishing
+    if (selectedPeriod === 'Live (Minutes)' && formatted.length > 60) {
+      setGraphData(formatted.slice(-60))
+    } else {
+      setGraphData(formatted)
+    }
+  }, [rawData, selectedPeriod, selectedSite, sites])
 
   const heatmapData = useMemo(() => generateHeatmapData(sites), [sites])
 
@@ -86,7 +169,7 @@ export default function AnalyticsClient({ sites, initialAlerts }: { sites: any[]
     const headers = ['Time', 'Expected (kW)', 'Actual (kW)'];
     const csvContent = [
       headers.join(','),
-      ...timeSeriesData.map(row => `${row.time},${row.expected},${row.actual}`)
+      ...graphData.map(row => `${row.time},${row.expected},${row.actual}`)
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -130,7 +213,8 @@ export default function AnalyticsClient({ sites, initialAlerts }: { sites: any[]
             value={selectedPeriod}
             onChange={(e) => setSelectedPeriod(e.target.value)}
           >
-            <option value="Today">Today</option>
+            <option value="Live (Minutes)">Live (Minutes)</option>
+            <option value="Today (Hourly)">Today (Hourly)</option>
             <option value="Week">This Week</option>
             <option value="Month">This Month</option>
             <option value="Year">This Year</option>
@@ -198,7 +282,7 @@ export default function AnalyticsClient({ sites, initialAlerts }: { sites: any[]
         <h2 className="text-sm font-bold text-white tracking-wider uppercase mb-6">Generation vs Expected</h2>
         <div className="h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={timeSeriesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <AreaChart data={graphData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
@@ -213,10 +297,67 @@ export default function AnalyticsClient({ sites, initialAlerts }: { sites: any[]
                 itemStyle={{ color: '#e2e8f0' }}
               />
               <Legend verticalAlign="top" height={36} iconType="circle" />
-              <Area type="monotone" dataKey="expected" name="Expected (kW)" stroke="#64748b" strokeWidth={2} fill="none" strokeDasharray="5 5" />
-              <Area type="monotone" dataKey="actual" name="Actual (kW)" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorActual)" />
+              <Area type="monotone" dataKey="expected" name="Expected (kW)" stroke="#64748b" strokeWidth={2} fill="none" strokeDasharray="5 5" dot={{ r: 2, fill: '#64748b' }} />
+              <Area type="monotone" dataKey="actual" name="Actual (kW)" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorActual)" dot={{ r: 4, fill: '#10b981', stroke: '#0d131f', strokeWidth: 2 }} />
             </AreaChart>
           </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* LIVE TELEMETRY FEED */}
+      <div className="bg-[#0d131f] border border-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col">
+        <div className="p-5 border-b border-slate-800 bg-[#131b2c] flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <Activity className="w-4 h-4 text-emerald-500 animate-pulse" />
+            <h2 className="text-sm font-bold text-white tracking-wider uppercase">Live Telemetry Feed</h2>
+          </div>
+          <div className="text-xs text-slate-400 flex items-center">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></div>
+            Listening for live data
+          </div>
+        </div>
+        <div className="p-0 overflow-x-auto">
+          <table className="w-full text-left text-sm text-slate-400">
+            <thead className="bg-[#0d131f] border-b border-slate-800 text-xs uppercase font-semibold text-slate-500">
+              <tr>
+                <th className="px-6 py-4">Time</th>
+                <th className="px-6 py-4">Site</th>
+                <th className="px-6 py-4">Power (kW)</th>
+                <th className="px-6 py-4">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/50">
+              {liveData.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
+                    Waiting for live data points... Ensure the simulator script is running.
+                  </td>
+                </tr>
+              ) : (
+                liveData.map((data, idx) => (
+                  <tr key={data.id || idx} className="hover:bg-slate-800/30 transition-colors animate-in fade-in slide-in-from-top-2 duration-300">
+                    <td className="px-6 py-4 font-mono text-slate-300">
+                      {new Date(data.timestamp).toLocaleTimeString()}
+                    </td>
+                    <td className="px-6 py-4 font-medium text-slate-200">
+                      {data.site_name}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-bold text-emerald-400">{Number(data.current_power_kw).toFixed(2)}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        data.status === 'Online' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 
+                        'bg-red-500/10 text-red-500 border border-red-500/20'
+                      }`}>
+                        {data.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

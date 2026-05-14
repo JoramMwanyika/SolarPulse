@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Activity, AlertTriangle, ArrowUpRight, ArrowDownRight, Zap, Sun, Clock, MoreHorizontal } from 'lucide-react'
+import { Activity, AlertTriangle, ArrowUpRight, ArrowDownRight, Zap, Sun, Clock, MoreHorizontal, Filter } from 'lucide-react'
 import MapWrapper from '@/components/MapWrapper'
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts'
 import { createClientComponentClient } from '@/utils/supabase/client'
@@ -25,6 +25,7 @@ export default function DashboardClient({
   const [sites, setSites] = useState(initialSites)
   const [telemetry, setTelemetry] = useState(initialTelemetry)
   const [alerts, setAlerts] = useState(initialAlerts)
+  const [selectedSiteId, setSelectedSiteId] = useState('all')
   const supabase = createClientComponentClient()
 
   useEffect(() => {
@@ -60,17 +61,22 @@ export default function DashboardClient({
     }
   }, [supabase])
 
-  // Compute live KPIs
-  const totalCapacity = sites.reduce((sum, site) => sum + Number(site.total_kwp || 0), 0)
-  const liveGeneration = telemetry.reduce((sum, t) => sum + Number(t.current_power_kw || 0), 0)
-  const todaysYield = telemetry.reduce((sum, t) => sum + Number(t.daily_energy_kwh || 0), 0)
-  const activeAlertsCount = alerts.filter(a => !a.is_resolved).length
+  // Compute live KPIs based on filter
+  const filteredSites = selectedSiteId === 'all' ? sites : sites.filter(s => s.id === selectedSiteId)
+  const filteredTelemetry = telemetry.filter(t => selectedSiteId === 'all' || t.site_id === selectedSiteId)
+  const filteredAlerts = alerts.filter(a => selectedSiteId === 'all' || a.site_id === selectedSiteId)
+
+  const totalCapacity = filteredSites.reduce((sum, site) => sum + Number(site.total_kwp || 0), 0)
+  const liveGeneration = filteredTelemetry.reduce((sum, t) => sum + Number(t.current_power_kw || 0), 0)
+  const todaysYield = filteredTelemetry.reduce((sum, t) => sum + Number(t.daily_energy_kwh || 0), 0)
+  const activeAlertsCount = filteredAlerts.filter(a => !a.is_resolved).length
 
   // Build map markers
-  const mapMarkers = sites.map(site => {
-    const latestTele = telemetry.find(t => t.site_id === site.id)
-    const status = latestTele?.status?.toLowerCase() === 'normal' ? 'green' 
-      : latestTele?.status?.toLowerCase() === 'underperforming' ? 'yellow' 
+  const mapMarkers = filteredSites.map(site => {
+    const latestTele = filteredTelemetry.find(t => t.site_id === site.id)
+    const statusStr = latestTele?.status?.toLowerCase() || 'unknown'
+    const status = (statusStr === 'normal' || statusStr === 'online') ? 'green' 
+      : statusStr === 'underperforming' ? 'yellow' 
       : 'red'
     return {
       id: site.id,
@@ -93,6 +99,28 @@ export default function DashboardClient({
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
+      
+      {/* HEADER & FILTERS */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#0d131f] p-4 rounded-2xl border border-slate-800 shadow-lg">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center border border-slate-700">
+            <Filter className="w-5 h-5 text-amber-500" />
+          </div>
+          <h1 className="text-xl font-bold text-white tracking-tight">Fleet Overview</h1>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <select 
+            className="bg-[#131b2c] border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-amber-500"
+            value={selectedSiteId}
+            onChange={(e) => setSelectedSiteId(e.target.value)}
+          >
+            <option value="all">All Sites</option>
+            {sites.map(s => <option key={s.id} value={s.id}>{s.site_name}</option>)}
+          </select>
+        </div>
+      </div>
+
       {/* KPIs Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-[#0d131f] border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden group hover:border-slate-700 transition-colors">
@@ -202,9 +230,9 @@ export default function DashboardClient({
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
-            {alerts.length === 0 ? (
+            {filteredAlerts.length === 0 ? (
                <div className="p-4 text-sm text-slate-500 text-center">No recent alerts.</div>
-            ) : alerts.slice(0, 20).map((alert, i) => {
+            ) : filteredAlerts.slice(0, 20).map((alert, i) => {
               const siteName = sites.find(s => s.id === alert.site_id)?.site_name || 'Unknown Site'
               const isCrit = alert.severity?.toLowerCase() === 'critical'
               const colorClass = isCrit ? 'red' : alert.severity?.toLowerCase() === 'warning' ? 'amber' : 'blue'
@@ -248,10 +276,10 @@ export default function DashboardClient({
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-slate-800/50">
-              {sites.map(site => {
-                const latestTele = telemetry.find(t => t.site_id === site.id)
+              {filteredSites.map(site => {
+                const latestTele = filteredTelemetry.find(t => t.site_id === site.id)
                 const statusStr = latestTele?.status || 'Unknown'
-                const isNormal = statusStr.toLowerCase() === 'normal'
+                const isNormal = statusStr.toLowerCase() === 'normal' || statusStr.toLowerCase() === 'online'
                 const isWarning = statusStr.toLowerCase() === 'underperforming'
                 const power = latestTele?.current_power_kw || 0
                 const yieldYf = site.total_kwp > 0 ? ((latestTele?.daily_energy_kwh || 0) / site.total_kwp).toFixed(2) : '0.00'
@@ -276,7 +304,7 @@ export default function DashboardClient({
                   </tr>
                 )
               })}
-              {sites.length === 0 && (
+              {filteredSites.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
                     No sites found. Visit <a href="/api/seed" className="text-amber-500 hover:underline">/api/seed</a> to populate your database with dummy data!
