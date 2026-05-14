@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Map, BarChart3, Settings, Bell, LogOut } from 'lucide-react'
+import { Map, BarChart3, Settings, Bell, LogOut, BrainCircuit } from 'lucide-react'
 import { signout } from '../(auth)/actions'
 
 export default function DashboardLayout({
@@ -32,6 +32,11 @@ export default function DashboardLayout({
             <Link href="/dashboard/analytics" className="flex items-center px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all">
               <BarChart3 className="w-5 h-5 mr-3" />
               <span className="font-medium text-sm">Analytics</span>
+            </Link>
+
+            <Link href="/dashboard/ai-analyst" className="flex items-center px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all">
+              <BrainCircuit className="w-5 h-5 mr-3" />
+              <span className="font-medium text-sm">AI Analyst</span>
             </Link>
 
             <Link href="/dashboard/admin" className="flex items-center px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all">
