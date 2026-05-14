@@ -81,6 +81,27 @@ export default function AnalyticsClient({ sites, initialAlerts }: { sites: any[]
     ...s,
     pr: 85 + Math.random() * 12
   })).sort((a, b) => b.pr - a.pr)
+  // Export handlers
+  const handleDownloadCSV = () => {
+    const headers = ['Time', 'Expected (kW)', 'Actual (kW)'];
+    const csvContent = [
+      headers.join(','),
+      ...timeSeriesData.map(row => `${row.time},${row.expected},${row.actual}`)
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `solarpulse_export_${selectedSite}_${selectedPeriod.toLowerCase()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleSharePDF = () => {
+    window.print();
+  };
 
   return (
     <div className="max-w-[1600px] mx-auto pb-10 space-y-6">
@@ -411,10 +432,16 @@ export default function AnalyticsClient({ sites, initialAlerts }: { sites: any[]
         <div className="bg-[#0d131f] border border-slate-800 rounded-2xl p-6 shadow-lg flex flex-col justify-center">
           <h2 className="text-sm font-bold text-white tracking-wider uppercase mb-4">Export Reports</h2>
           <div className="space-y-3">
-            <button className="w-full flex items-center justify-center px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors text-sm font-medium">
+            <button 
+              onClick={handleDownloadCSV}
+              className="w-full flex items-center justify-center px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors text-sm font-medium"
+            >
               <Download className="w-4 h-4 mr-2" /> Download CSV
             </button>
-            <button className="w-full flex items-center justify-center px-4 py-2.5 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white rounded-lg transition-colors text-sm font-medium">
+            <button 
+              onClick={handleSharePDF}
+              className="w-full flex items-center justify-center px-4 py-2.5 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white rounded-lg transition-colors text-sm font-medium"
+            >
               <Share2 className="w-4 h-4 mr-2" /> Share PDF Report
             </button>
           </div>
